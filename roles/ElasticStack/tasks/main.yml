@@ -1,0 +1,147 @@
+---
+- name: install java (Ubuntu)
+  apt:
+    name: openjdk-11-jdk
+    state: latest
+  when: ansible_distribution == "Ubuntu"
+
+- name: install java (CentOS)
+  dnf:
+    name: java-11-openjdk
+    state: latest
+  when: ansible_distribution == "CentOS"
+
+- name: Install EPEL repository
+  yum:
+    name: epel-release
+    state: latest
+  when: ansible_distribution == "CentOS"
+
+- name: Add GPG key for ElasticSearch (Ubuntu)
+  tags: ubuntu
+  apt_key:
+    url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    state: present
+  when: ansible_distribution == "Ubuntu"
+
+- name: Allow Port 9200 through Firewall (CentOS)
+  firewalld:
+    zone: public
+    port: 9200/tcp
+    permanent: yes
+    state: enabled
+    immediate: yes
+  when: ansible_distribution == "CentOS"
+
+- name: Allow Port 9200 through Firewall (Ubuntu)
+  ufw:
+    rule: allow
+    port: 9200
+    proto: tcp
+  when: ansible_distribution == "Ubuntu"
+
+- name: Add ElasticSearch to APT repository (Ubuntu)
+  tags: ubuntu
+  apt_repository:
+    repo: "deb https://artifacts.elastic.co/packages/7.x/apt stable main"
+    #filename: 'elastic-7.x'
+  when: ansible_distribution == "Ubuntu"
+
+- name: Install ElasticSearch to Yum repository (CentOS)
+  yum_repository:
+    name: elasticsearch
+    description: ElasticSearch Repository
+    baseurl: https://artifacts.elastic.co/packages/7.x/yum
+    gpgcheck: yes
+    gpgkey: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    enabled: yes
+  when: ansible_distribution == "CentOS"
+
+- name: Configure ElasticSearch
+  blockinfile:
+    path: /etc/elasticsearch/elasticsearch.yml
+    block: |
+      # ElasticSearch Configuration
+
+      cluster.name: my-cluster
+      node.name: dev-node-1
+      network.host: 0.0.0.0
+      http.port: 9200
+      discovery.type: single-node
+      path.data: /var/lib/elasticsearch
+      path.logs: /var/log/elasticsearch
+      bootstrap.memory_lock: true
+    state: present
+    create: yes
+
+- name: Configure Kibana
+  blockinfile:
+    path: /etc/kibana/kibana.yml
+    block: |
+      # Kibana Configuration
+
+      server.port: 5601
+      server.host: "localhost"
+      server.name: "Lope-Act10"
+      elasticsearch.hosts: ["http://localhost:9200"]
+      kibana.index: ".kibana"
+      elasticsearch.requestTimeout: 180000
+    state: present
+    create: yes
+
+- name: Configure Logstash
+  blockinfile:
+    path: /etc/logstash/conf.d/logstash.conf
+    block: |
+      # Logstash Configuration
+
+      input {
+        beats {
+          port => 5044
+          host => "127.0.0.1"
+         }
+      }
+
+      filter {
+      # nginx access log
+        if [source] =~ /\/(access)\d{0,10}\.(log)/ {
+          grok {
+            match => {"message" => "%{COMBINEDAPACHELOG}"}
+            add_tag => ["nginx_access_log"]
+          }
+          mutate {
+            rename => {"timestamp" => "log_timestamp"}
+          }
+        }
+      }
+
+      output {
+        elasticsearch { hosts => ["localhost:9200"] }
+        stdout { codec => rubydebug }
+      }
+    state: present
+    create: yes
+
+- name: Install ElasticSearch, Kibana, and Logstash
+  package:
+    name:
+      - elasticsearch
+      - kibana
+      - logstash
+    state: latest
+
+- name: Force systemd to reread configs
+  systemd:
+    daemon_reload: yes
+
+- name: Enable ElasticSearch, Kibana, and Logstash Service
+  vars:
+     elastic_services:
+       - elasticsearch
+       - kibana
+       - logstash
+  service:
+     name: "{{ item }}"
+     enabled: yes
+     state: started
+  loop: "{{ elastic_services }}"

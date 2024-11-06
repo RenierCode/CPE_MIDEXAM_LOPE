@@ -1,0 +1,39 @@
+---
+- name: Install nagios requirements (CentOS)
+  dnf:
+    name:
+      - gcc
+      - glibc
+      - glibc-common
+      - wget
+      - unzip
+      - httpd
+      - php
+      - gd
+      - gd-devel
+      - perl
+      - postfix
+      - openssl-devel
+    state: latest
+  become: true
+  when: ansible_distribution == "CentOS"
+
+- name: Install EPEL repo (CentOS)
+  dnf:
+    name: epel-release
+    state: latest
+  when: ansible_distribution == "CentOS"
+
+- name: Install Nagios (CentOS)
+  dnf:
+    name: nagios
+    state: latest
+  when: ansible_distribution == "CentOS"
+
+- name: Start and Enable Nagios (CentOS)
+  service:
+    name: nagios
+    state: restarted
+    enabled: true
+  when: ansible_distribution == "CentOS"
+

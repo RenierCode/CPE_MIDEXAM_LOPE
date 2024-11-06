@@ -1,0 +1,51 @@
+---
+- name: Add GPG key for Grafana (Ubuntu)
+  tags: ubuntu
+  apt_key:
+    url: https://rpm.grafana.com/gpd.key
+    state: present
+  when: ansible_distribution == "Ubuntu"
+
+- name: Add Grafana to APT repository (Ubuntu)
+  tags: ubuntu
+  apt_repository:
+    repo: "deb https://apt.grafana.com stable main"
+  when: ansible_distribution == "Ubuntu"
+
+- name: Add Grafana GPG key(CentOS)
+  get_url:
+    url: https://rpm.grafana.com/gpg.key
+    dest: /tmp/gpg.key
+  when: ansible_distribution == "CentOS"
+
+- name: Import Grafana GPG key (CentOS)
+  shell: sudo rpm --import /tmp/gpg.key
+  when: ansible_distribution == "CentOS"
+
+- name: Add Grafana YUM Repository (CentOS)
+  copy:
+    content: |
+      [grafana]
+      name=grafana
+      baseurl=https://rpm.grafana.com
+      repo_gpgcheck=1
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://rpm.grafana.com/gpg.key
+      sslverify=1
+      sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+      exclude=*beta*
+    dest: /etc/yum.repos.d/grafana.repo
+  when: ansible_distribution == "CentOS"
+
+- name: Install Grafana
+  package:
+    name: grafana
+    state: latest
+
+- name: Enabled Grafana Service
+  service:
+    name: grafana
+    enabled: yes
+    state: started
+
